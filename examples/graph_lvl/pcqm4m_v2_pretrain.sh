@@ -45,7 +45,8 @@ max_grad_norm=5
 eps=1e-8
 use_ema=0
 ## deep-speed config; set it to empty to enable native DDP training
-deepspeed_config="./examples/ds_config2_pt.json"
+# deepspeed_config="./examples/ds_config2_pt.json"
+deepspeed_config = ""
 
 ## iv. optimization objective
 task_type="pretrain-mlm"  # pretrain  pretrain-mlm  pretrain-ltp  pretrain-euler
@@ -150,41 +151,42 @@ then
 fi
 
 
+
 raw_udf="
-  --data_dir='${data_dir_prefix}/${data_dir}'
+  --data_dir='${data_dir_prefix}/${data_dir}' 
   --output_dir='${output_dir_prefix}/${output_dir}'
-  --pretrain_cpt='${pretrain_cpt}'
-  --dataset_name='${dataset_source}'
-  --task_type='${task_type}'
-  --tokenizer_class='${tokenizer_class}'
-  --tokenization_config='${tokenization_config}'
-  --stack_method='${stack_method}'
-  --batch_size=${batch_size}
-  --pack_tokens=${pack_tokens}
-  --num_workers=${num_cpus}
-  --max_position_embeddings=${max_position_embeddings}
-  --tie_word_embeddings=${tie_word_embeddings}
-  --lr=${lr}
-  --weight_decay=${weight_decay}
-  --eps=${eps}
-  --max_grad_norm=${max_grad_norm}
-  --total_tokens=${total_tokens}
-  --warmup_tokens=${warmup_tokens}
-  --model_config='${model_config}'
-  --num_hidden_layers=${num_hidden_layers}
-  --hidden_size=${hidden_size}
-  --intermediate_size=${intermediate_size}
-  --num_attention_heads=${num_attention_heads}
-  --hidden_act='${hidden_act}'
-  --stacked_feat_agg_method=${stacked_feat_agg_method}
-  --samples_per_saving=${samples_per_saving}
-  --deepspeed_config='${deepspeed_config}'
-  --attention_dropout=${attention_dropout}
-  --embed_dropout=${embed_dropout}
-  --path_dropout=${path_dropout}
-  --mlp_dropout=${mlp_dropout}
-  --layer_scale_init_value=${layer_scale_init_val}
-  --use_ema=${use_ema}
+  --pretrain_cpt='${pretrain_cpt}'  
+  --dataset_name='${dataset_source}'  
+  --task_type='${task_type}' 
+  --tokenizer_class='${tokenizer_class}'  
+  --tokenization_config='${tokenization_config}' 
+  --stack_method='${stack_method}'  
+  --batch_size=${batch_size} 
+  --pack_tokens=${pack_tokens} 
+  --num_workers=${num_cpus} 
+  --max_position_embeddings=${max_position_embeddings}  
+  --tie_word_embeddings=${tie_word_embeddings} 
+  --lr=${lr} 
+  --weight_decay=${weight_decay} 
+  --eps=${eps} 
+  --max_grad_norm=${max_grad_norm}  
+  --total_tokens=${total_tokens} 
+  --warmup_tokens=${warmup_tokens} 
+  --model_config='${model_config}' 
+  --num_hidden_layers=${num_hidden_layers} 
+  --hidden_size=${hidden_size} 
+  --intermediate_size=${intermediate_size} 
+  --num_attention_heads=${num_attention_heads} 
+  --hidden_act='${hidden_act}' 
+  --stacked_feat_agg_method=${stacked_feat_agg_method} 
+  --samples_per_saving=${samples_per_saving} 
+  --deepspeed_config='${deepspeed_config}' 
+  --attention_dropout=${attention_dropout} 
+  --embed_dropout=${embed_dropout} 
+  --path_dropout=${path_dropout} 
+  --mlp_dropout=${mlp_dropout} 
+  --layer_scale_init_value=${layer_scale_init_val} 
+  --use_ema=${use_ema} 
 "
 
 udf=${raw_udf//$'\n'/}

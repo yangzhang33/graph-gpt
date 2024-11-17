@@ -28,3 +28,5 @@ xdl_config_*
 /script/whl/torch_spline_conv-1.2.1+pt112cpu-cp38-cp38-linux_x86_64.whl
 /requirements_nebula.txt
 /requirements_pai.txt
+src/models/graphbert/__pycache__/
+src/models/graphgpt2/__pycache__/

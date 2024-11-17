@@ -118,24 +118,23 @@ def train(
     samples_per_saving: Optional[int] = None,
 ):
     use_tb_writer = False
-    use_ema = bool(use_ema)
+    use_ema = bool(use_ema) # False
     ema_file = "model_ema.pt"
     ema_file_best = "model_ema_best.pt"
     ema_best_res = None
     ema_best_flag = False
-    use_deepspeed = len(deepspeed_config) > 0
+    use_deepspeed = len(deepspeed_config) > 0 # True
     if use_ema:
         do_test = 1
-
-    if (intermediate_size == 0) and (num_attention_heads == 0):
+    if (intermediate_size == 0) and (num_attention_heads == 0): # True
         (
             hidden_size,
             intermediate_size,
             num_attention_heads,
             num_hidden_layers,
         ) = modules_utils.set_up_model_architect(
-            hidden_size=hidden_size, num_hidden_layers=num_hidden_layers
-        )
+            hidden_size=hidden_size, num_hidden_layers=num_hidden_layers # 768 24
+        )# 768 3072 12 24
     causal_attention = 0 if task_type == "pretrain-mlm" else causal_attention
     betas = (0.9, 0.95)
     # lr * 0.1 -> from llama2 pre-train settings
@@ -153,12 +152,12 @@ def train(
     world_size = dist.get_world_size()
     rank = dist.get_rank()
     local_rank = os.environ.get("LOCAL_RANK")
-    print(f"\nworld size: {world_size}, rank: {rank}, local rank: {local_rank}")
+    print(f"\nworld size: {world_size}, rank: {rank}, local rank: {local_rank}") # 1 0 0
     rnd_seed = torch.random.initial_seed() - rank
     random.seed(rnd_seed)
-    print(f"seed random with {rnd_seed}")
+    print(f"seed random with {rnd_seed}") # 1234
     steps_per_saving = samples_per_saving // (world_size * batch_size)
-    print(f"\nsteps_per_saving: {steps_per_saving}")
+    print(f"\nsteps_per_saving: {steps_per_saving}") # 976
     params = print_params(**locals())
 
     # 1. prepare data & tokenizer
@@ -188,7 +187,7 @@ def train(
         "embed_dim", 0
     ) + tokenizer_config["semantics"]["edge"].get("embed_dim", 0)
     print(
-        f"stacked_feat: {stacked_feat}, next_n_token: {next_n_token}, embed_dim: {embed_dim}"
+        f"stacked_feat: {stacked_feat}, next_n_token: {next_n_token}, embed_dim: {embed_dim}" # 13 13 0
     )
 
     # 1.2 get graph dataset
@@ -253,7 +252,7 @@ def train(
     tokens_per_sample = (
         tokens_per_sample // 2 if task_type == "pretrain-euler" else tokens_per_sample
     )
-    print(f"\n[{datetime.now()}] tokens_per_sample: {tokens_per_sample}")
+    print(f"\n[{datetime.now()}] tokens_per_sample: {tokens_per_sample}") # 20
 
     inspect_tokenization_results(dataset, gtokenizer)
     # re-initialize `gtokenizer.dataset` to avoid `TypeError: cannot pickle 'generator' object`
@@ -270,7 +269,7 @@ def train(
     print(
         f"\n[{datetime.now()}] total_num_steps: {total_num_steps}\nwarmup_num_steps: {warmup_num_steps}\nepochs per worker: {epochs}\n"
     )
-
+    # 195313 4883 61
     # 2. set model
     # 2.1 init model config
     config = conf_utils.parse_model_config(**locals())
@@ -284,7 +283,7 @@ def train(
     model.gradient_checkpointing_enable()
     # silence the warnings. Please re-enable for inference!
     model.config.use_cache = False
-    print_trainable_parameters(model)
+    print_trainable_parameters(model) # 235368960
     # 2.21 load from ckp IF provided existing ckp and NOT resume from the ckp
     model = loader_utils.load_from_ckp(
         misc_utils=misc_utils,
