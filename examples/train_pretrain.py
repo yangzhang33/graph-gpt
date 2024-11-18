@@ -220,7 +220,7 @@ def train(
         pretrain_mode=True,
         ensemble_datasets=tokenizer_config.get("ensemble_datasets", []),
     )
-    reset_samples_per_epoch = (
+    reset_samples_per_epoch = (   # what is this
         dataset.reset_samples_per_epoch
         if hasattr(dataset, "reset_samples_per_epoch")
         else False
@@ -230,12 +230,24 @@ def train(
     else:
         idx = dataset.sampler[0]
         print(dataset[idx])
+
+
+
+
+
+
+
     # 1.3 build vocab and then init tokenizer from the tokenization config
-    vocab_builder.build_vocab(raw_dataset, tokenizer_config, rank)
-    tokenizer_cls = getattr(tokenizer, tokenizer_config["tokenizer_class"])
+    vocab_builder.build_vocab(raw_dataset, tokenizer_config, rank) # build vocab from file or scratch
+    tokenizer_cls = getattr(tokenizer, tokenizer_config["tokenizer_class"]) # StackGSTTokenizer, custom defined
     gtokenizer = tokenizer_cls(
-        tokenizer_config, add_eos=add_eos, stack_method=stack_method
+        tokenizer_config, add_eos=add_eos, stack_method=stack_method # instantiate
     )
+
+
+
+
+    
     # 1.4 get train/test sampler
     train_dataset = dataset
     if not isinstance(train_dataset, IterableDataset):
@@ -245,7 +257,7 @@ def train(
             train_dataset, train_sampler
         )
     else:
-        train_cnt = len(train_dataset) * world_size
+        train_cnt = len(train_dataset) * world_size # why
         train_sampler = None
         train_shuffle = False
 
@@ -263,31 +275,39 @@ def train(
             train_sampler,
             max_position_embeddings,
             world_size,
-        )
+        ) # Estimated tokens per sample 20.0 with std 4.0 using 10000 samples and mpe 1024
+
     tokens_per_sample = (
         tokens_per_sample // 2 if task_type == "pretrain-euler" else tokens_per_sample
     )
-    print(f"\n[{datetime.now()}] tokens_per_sample: {tokens_per_sample}") # 20 what is this
+    print(f"\n[{datetime.now()}] tokens_per_sample: {tokens_per_sample}") # 20 what is this: estimated tokens per sample, by 10000 samples and mpe 1024
 
-    inspect_tokenization_results(dataset, gtokenizer)
+    inspect_tokenization_results(dataset, gtokenizer) # print out tokenization results, one sample
     # re-initialize `gtokenizer.dataset` to avoid `TypeError: cannot pickle 'generator' object`
     gtokenizer.dataset = train_dataset if pack_tokens > 0 else None
 
     total_num_steps = int(
-        math.ceil(total_tokens / (tokens_per_sample * batch_size * world_size))
+        math.ceil(total_tokens / (tokens_per_sample * batch_size * world_size)) # total_tokens defined in config 4e9/(20*1024*1) = 195313
     )
     warmup_num_steps = int(
-        math.ceil(warmup_tokens / (tokens_per_sample * batch_size * world_size))
+        math.ceil(warmup_tokens / (tokens_per_sample * batch_size * world_size)) # 1e8 ...
     )
-    tmp_cnt = len(train_sampler) if train_sampler else train_cnt / world_size
-    epochs = int(math.ceil(total_tokens / (tmp_cnt * tokens_per_sample * world_size)))
+    tmp_cnt = len(train_sampler) if train_sampler else train_cnt / world_size # train_cnt = len(train_dataset) * world_size
+    epochs = int(math.ceil(total_tokens / (tmp_cnt * tokens_per_sample * world_size))) # token for training / token in the dataset = epochs
     print(
-        f"\n[{datetime.now()}] total_num_steps: {total_num_steps}\nwarmup_num_steps: {warmup_num_steps}\nepochs per worker: {epochs}\n"
+        f"\n[{datetime.now()}] total_num_steps: {total_num_steps}\nwarmup_num_steps: {warmup_num_steps}\nepochs per worker: {epochs}\n" # 61 epochs
     )
     # 195313 4883 61
+
+
+
+
+
+
+
     # 2. set model
     # 2.1 init model config
-    config = conf_utils.parse_model_config(**locals())
+    config = conf_utils.parse_model_config(**locals())  # for model
     print(config)
     # 2.2 create model
     if use_deepspeed:
@@ -299,6 +319,11 @@ def train(
     # silence the warnings. Please re-enable for inference!
     model.config.use_cache = False
     print_trainable_parameters(model) # 235368960
+
+
+
+
+
     # 2.21 load from ckp IF provided existing ckp and NOT resume from the ckp
     model = loader_utils.load_from_ckp(
         misc_utils=misc_utils,
@@ -306,8 +331,13 @@ def train(
         output_dir=output_dir,
         model=model,
         config=config,
-    )
+    ) # init if not provided
     print(model)
+
+
+
+
+
     # 2.3 Create optimizer (load optimization config if given)
     model_parameters = model.parameters()
     # obtain layerwise lr
@@ -344,6 +374,13 @@ def train(
     model_ema = None
     if use_ema:
         model_ema = ModelEmaV3(model.module)
+
+
+
+
+
+
+
     # 2.4 Load model parameters and optimizer stats from ckp IF resuming from current ckp
     if (len(pretrain_cpt) > 0) and (pretrain_cpt == output_dir):
         ckp, _ = misc_utils.get_latest_ckp(pretrain_cpt)
@@ -362,20 +399,34 @@ def train(
             load_checkpoint(model_ema.module, ema_ckp, use_ema=True)
             print(f"load model_ema ckp from {ema_ckp}")
 
-    if int(os.environ.get("RANK", 0)) == 0:
+    if int(os.environ.get("RANK", 0)) == 0: # only rank 0 do this
         model.module.config.save_pretrained(output_dir)
         print(
             f"[{datetime.now()}] Finish -> Dump model config to `{output_dir}/config.json`"
         )
     print(f"[{datetime.now()}] Finish -> 2. set optimizer")
+
+
+
+
+
+
+
     # 3. set initial status
     # 3.0 set initial condition of optimization, either resuming from ckp or starting from scratch
-    last_step_index, ep_init, j_init, ls_log, ls_result = conf_utils.init_log_conf(
+    last_step_index, ep_init, j_init, ls_log, ls_result = conf_utils.init_log_conf(    #         ep_init = prev_epoch or 0, j_init = last_step_index or 0
         misc_utils=misc_utils,
         pretrain_cpt=pretrain_cpt,
         output_dir=output_dir,
         steps_per_saving=steps_per_saving,
     )
+
+
+
+
+
+
+
     # 3.1 init collator
     collator_fn = collator.DataCollatorForGSTCausal(
         tokenizer=gtokenizer,
@@ -384,13 +435,20 @@ def train(
         return_tensors="pt",
     )
     print(f"[{datetime.now()}] Finish -> 3.1 init collator")
+
+
+
+
+
+
+
     # 3.2 set-up loader
     tb_writer = None
     if int(os.environ.get("RANK", 0)) == 0:
         tmp_ds_config = None
         if use_deepspeed:
             tmp_ds_config = copy.deepcopy(model.config)
-        conf_utils.dump_all_conf(**locals())
+        conf_utils.dump_all_conf(**locals()) # tokenization, param, deepseed
 
         if use_tb_writer:
             # note: ONLY worker 0 write summary
@@ -413,10 +471,10 @@ def train(
             train_sampler_new.extend(train_dataset.sampler)
         random.shuffle(train_sampler_new)
         print(
-            f"train_sampler for {epochs} epochs increase: {len(train_sampler)} -> {len(train_sampler_new)}"
+            f"train_sampler for {epochs} epochs increase: {len(train_sampler)} -> {len(train_sampler_new)}"    # train_sampler for 61 epochs increase: 3323391 -> 202726851 3323391* 61
         )
         train_sampler = train_sampler_new
-        epochs = 1
+        epochs = 1   # reset to 1 epoch
     train_loader = DataLoader(
         dataset=train_dataset,
         batch_size=batch_size,
@@ -429,6 +487,13 @@ def train(
         drop_last=True,
         prefetch_factor=4,
     )
+
+
+
+
+
+
+
 
     # 4. Training ...
     print(f"[{datetime.now()}] Training start ...")
@@ -444,10 +509,10 @@ def train(
         )
     else:
         epoch_start = 0
-    j = j_init
-    ep = ep_init
+    j = j_init   # from set initial status 0 or last_step_index
+    ep = ep_init # 0 or prev_epoch
     model.train()
-    for epoch in range(epoch_start, epochs):
+    for epoch in range(epoch_start, epochs):   # 0, 1
         if (not isinstance(train_dataset, IterableDataset)) and reset_samples_per_epoch:
             print(
                 f"Re-initialize train-loader with shuffled sampler and reset dataset!"
@@ -468,7 +533,7 @@ def train(
                 drop_last=True,
                 prefetch_factor=2,
             )
-        i_local = 0
+        i_local = 0 # strating index of the loader
         if is_odps_table_ds:
             train_loader, i_local = loader_utils.init_loader_for_odps_table_ds(
                 epoch=epoch,
@@ -494,7 +559,7 @@ def train(
             attention_mask = data["attention_mask"].to(device)
             labels = data["labels"].to(device)
             inputs_raw_embeds = None
-            if embed_dim > 0:
+            if embed_dim > 0: # in tokenizer config
                 inputs_raw_embeds = data["embed"].to(device)
 
             if use_deepspeed:
@@ -502,7 +567,7 @@ def train(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
                     labels=labels,
-                    inputs_raw_embeds=inputs_raw_embeds,
+                    inputs_raw_embeds=inputs_raw_embeds, # initial embedding of input instead of embedding layer in model
                 )  # Perform a single forward pass.
                 loss = output.loss
                 model.backward(loss)  # Derive gradients.
@@ -514,7 +579,7 @@ def train(
                 optimizer.zero_grad()  # Clear gradients.
                 # https://pytorch.org/docs/stable/notes/amp_examples.html#amp-examples
                 # Enables autocasting for the forward pass (model + loss)
-                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                with torch.autocast(device_type="cuda", dtype=torch.float16):  #  Autocast Ensures that forward and loss computations use float16 precision where safe, while retaining float32 precision for operations where higher precision is required.
                     output = model(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
@@ -543,11 +608,11 @@ def train(
                 lr_scheduler.step()
             if model_ema is not None:
                 model_ema.update(model, step=j)
-            if j % logging_steps == 0:
+            if j % logging_steps == 0: # j = j_init
                 t_interval = (datetime.now() - t_start).total_seconds()
                 samples_per_second = round((i - i_local) * batch_size / t_interval, 1)
                 tokens_per_second = round(
-                    (i - i_local) * batch_size * tokens_per_sample / t_interval
+                    (i - i_local) * batch_size * tokens_per_sample / t_interval   # estimated
                 )
                 print(
                     f"[{datetime.now()}][epoch {ep}][local {epoch}: {i}][global {j}] train_loss: {round(loss.item(),7)}, {samples_per_second} samples / {tokens_per_second} tokens per sec"
@@ -568,8 +633,8 @@ def train(
                 )
                 break
 
-            if (j % steps_per_saving == 0) and (j > j_init):
-                ep += 1
+            if (j % steps_per_saving == 0) and (j > j_init):   #     steps_per_saving = samples_per_saving // (world_size * batch_size) # 1000000 // (1 * 1024) = 976
+                ep += 1 # no
                 print(
                     f"[{datetime.now()}][end of epoch {ep}][local {epoch}: {i}][global {j}] Trained with {j*tokens_per_sample*batch_size*world_size} tokens! Saving ckp and logs!"
                 )
@@ -607,7 +672,7 @@ def train(
                     for name, param in model.named_parameters():
                         tb_writer.add_histogram(name, param, ep)
 
-            j += 1
+            j += 1 # batch number, step number
         if j == total_num_steps:
             print(
                 f"Total number of steps {total_num_steps} reached, break outer loop!!!"
