@@ -117,13 +117,13 @@ def train(
     outputs: str = "",  # ODPS output table names
     samples_per_saving: Optional[int] = None,
 ):
-    use_tb_writer = False
-    use_ema = bool(use_ema) # False
+    use_tb_writer = False           # use tensorboard writer
+    use_ema = bool(use_ema) # False # use exponential moving average to smooth model
     ema_file = "model_ema.pt"
     ema_file_best = "model_ema_best.pt"
     ema_best_res = None
     ema_best_flag = False
-    use_deepspeed = len(deepspeed_config) > 0 # True
+    use_deepspeed = len(deepspeed_config) > 0 # True # use deepspeed for training, good to set scheduler
     if use_ema:
         do_test = 1
     if (intermediate_size == 0) and (num_attention_heads == 0): # True
@@ -133,12 +133,15 @@ def train(
             num_attention_heads,
             num_hidden_layers,
         ) = modules_utils.set_up_model_architect(
-            hidden_size=hidden_size, num_hidden_layers=num_hidden_layers # 768 24
+            hidden_size=hidden_size, num_hidden_layers=num_hidden_layers # 768 24 related to model names intermediate_size = hidden_size * 4, num_attention_heads = hidden_size // 64
         )# 768 3072 12 24
     causal_attention = 0 if task_type == "pretrain-mlm" else causal_attention
-    betas = (0.9, 0.95)
+    #########################
+    betas = (0.9, 0.95) # used in AdamW optimizer, important for config
+    #########################
     # lr * 0.1 -> from llama2 pre-train settings
-    min_lr = lr * 0.1 if use_deepspeed else 0
+    min_lr = lr * 0.1 if use_deepspeed else 0    # used in scheduler, when not using deepspeed.
+    #########################
     gpu_name = torch.cuda.get_device_name()
     GraphModel, GraphModelConfig = dict_models[model_type]
     if os.path.exists(os.path.join(output_dir, "log.csv")):
@@ -147,18 +150,23 @@ def train(
         )
         pretrain_cpt = output_dir
     # 0. init distributed train and get gpu/device info
-    dist.init_process_group(backend="nccl", init_method="env://")
-    dist.barrier()
-    world_size = dist.get_world_size()
-    rank = dist.get_rank()
-    local_rank = os.environ.get("LOCAL_RANK")
+    dist.init_process_group(backend="nccl", init_method="env://")  # for distributed training
+    dist.barrier() # for sync training
+    world_size = dist.get_world_size() # 1 # number of GPUs
+    rank = dist.get_rank() # 0 # current GPU index
+    local_rank = os.environ.get("LOCAL_RANK") # 0 # current GPU index local to the node
     print(f"\nworld size: {world_size}, rank: {rank}, local rank: {local_rank}") # 1 0 0
     rnd_seed = torch.random.initial_seed() - rank
     random.seed(rnd_seed)
     print(f"seed random with {rnd_seed}") # 1234
-    steps_per_saving = samples_per_saving // (world_size * batch_size)
+    steps_per_saving = samples_per_saving // (world_size * batch_size) # 1000000 // (1 * 1024) = 976
     print(f"\nsteps_per_saving: {steps_per_saving}") # 976
     params = print_params(**locals())
+
+
+
+
+
 
     # 1. prepare data & tokenizer
     # 1.1 read configuration
@@ -166,29 +174,36 @@ def train(
     assert "pretrain" in tokenizer_config["task_type"]
     assert (
         tokenizer_config["semantics"]["attr_assignment"]
-        in tokenizer_utils.ATTR_ASSIGNMENT_TYPES
+        in tokenizer_utils.ATTR_ASSIGNMENT_TYPES   # ATTR_ASSIGNMENT_TYPES = {"first", "last", "random", "all", "mix"}
     )
     pprint(tokenizer_config)
     if tokenizer_config["tokenizer_class"] == "StackedGSTTokenizer":
         attr_dim = (
-            tokenizer_config["semantics"]["edge"]["dim"]
-            + tokenizer_config["semantics"]["node"]["dim"]
-        )
-        assert stack_method in ("short", "long", None), f"stack_method: {stack_method}"
-        if tokenizer_config["structure"]["edge"]["remove_edge_type_token"]:
+            tokenizer_config["semantics"]["edge"]["dim"] # 3
+            + tokenizer_config["semantics"]["node"]["dim"] # 9
+        ) # 12
+        assert stack_method in ("short", "long", None), f"stack_method: {stack_method}" # short
+        if tokenizer_config["structure"]["edge"]["remove_edge_type_token"]: # True
             stacked_feat = 1 + attr_dim
         else:
             stacked_feat = 2 + attr_dim
         next_n_token = stacked_feat
     else:
         stacked_feat = 1
-        next_n_token = 1
+        next_n_token = 1 # maybe how many pack of tokens to predict
     embed_dim = tokenizer_config["semantics"]["node"].get(
         "embed_dim", 0
-    ) + tokenizer_config["semantics"]["edge"].get("embed_dim", 0)
+    ) + tokenizer_config["semantics"]["edge"].get("embed_dim", 0) # 0
     print(
         f"stacked_feat: {stacked_feat}, next_n_token: {next_n_token}, embed_dim: {embed_dim}" # 13 13 0
     )
+
+
+
+
+
+
+
 
     # 1.2 get graph dataset
     dataset, raw_dataset = read_dataset(
@@ -252,7 +267,7 @@ def train(
     tokens_per_sample = (
         tokens_per_sample // 2 if task_type == "pretrain-euler" else tokens_per_sample
     )
-    print(f"\n[{datetime.now()}] tokens_per_sample: {tokens_per_sample}") # 20
+    print(f"\n[{datetime.now()}] tokens_per_sample: {tokens_per_sample}") # 20 what is this
 
     inspect_tokenization_results(dataset, gtokenizer)
     # re-initialize `gtokenizer.dataset` to avoid `TypeError: cannot pickle 'generator' object`
