@@ -45,8 +45,8 @@ max_grad_norm=5
 eps=1e-8
 use_ema=0
 ## deep-speed config; set it to empty to enable native DDP training
-# deepspeed_config="./examples/ds_config2_pt.json"
-deepspeed_config = ""
+deepspeed_config="./examples/ds_config2_pt.json"
+# deepspeed_config = ""
 
 ## iv. optimization objective
 task_type="pretrain-mlm"  # pretrain  pretrain-mlm  pretrain-ltp  pretrain-euler
