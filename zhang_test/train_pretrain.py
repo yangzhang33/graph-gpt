@@ -202,7 +202,11 @@ def train(
         f"stacked_feat: {stacked_feat}, next_n_token: {next_n_token}, embed_dim: {embed_dim}" # 13 13 0
     )
 
-
+    # import json
+    # # save tokenization config to output_dir
+    # with open('./zhang_test/tokenizer_config.json', "w") as f:
+    #     json.dump(tokenizer_config, f, indent=4)
+    #     print('saved')
 
 
 
@@ -310,10 +314,14 @@ def train(
     # 2. set model
     # 2.1 init model config
     config = conf_utils.parse_model_config(**locals())  # for model
-    print(config)
+    # print(config)
 
+    # import pickle
+    # # save tokenization config to output_dir
+    # with open('./zhang_test/model_config.pkl', "wb") as f:
+    #     pickle.dump(config, f)
+    #     print('saved')
 
-    
     # 2.2 create model
     if use_deepspeed:
         deepspeed.init_distributed(
@@ -332,6 +340,7 @@ def train(
 
 
 
+    pretrain_cpt = '/datalake/datastore1/yang/graph-gpt/exp/models/pcqm4m-v2/medium_ntp/pt_ns_h512_l8_b8192_mpe1024_tk1e9_gelu_pretrain3.3m_nmlm_mrlinear_mtp0.8_0_0.2_lr3e-4_adp0.1_pdp0_edp0_mdp0_lsi0_short_gated_wd0.1'
 
     # 2.21 load from ckp IF provided existing ckp and NOT resume from the ckp
     model = loader_utils.load_from_ckp(
@@ -342,7 +351,7 @@ def train(
         config=config,
     ) # init if not provided
     print(model)
-
+    exit()
 
 
 

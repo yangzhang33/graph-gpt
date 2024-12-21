@@ -214,12 +214,12 @@ def train(
     if seed is None:
         seed = int(datetime.now().date().strftime("%Y%m%d")[::-1])
     use_tb_writer = False
-    use_ema = bool(use_ema)
+    use_ema = bool(use_ema) # 1
     ema_file = "model_ema.pt"
     ema_file_best = "model_ema_best.pt"
     ema_best_res = None
     ema_best_flag = False
-    use_deepspeed = len(deepspeed_config) > 0
+    use_deepspeed = len(deepspeed_config) > 0 # ./examples/ds_config2.json
 
     if (intermediate_size == 0) and (num_attention_heads == 0):
         (
@@ -230,7 +230,7 @@ def train(
         ) = modules_utils.set_up_model_architect(
             hidden_size=hidden_size, num_hidden_layers=num_hidden_layers
         )
-    ntp_ratio, task_ratio = 1 - task_ratio, task_ratio
+    ntp_ratio, task_ratio = 1 - task_ratio, task_ratio # 0, 1.00
     gpu_name = torch.cuda.get_device_name()
 
     GraphModel, GraphModelConfig = dict_models[model_type]
@@ -240,6 +240,13 @@ def train(
             f"log file {os.path.join(output_dir, 'log.csv')} exists, resume training from {output_dir} instead of initializing from pre-train ckp {pretrain_cpt}!"
         )
         pretrain_cpt = output_dir
+
+
+
+
+
+
+
     # 0. init distributed train and get gpu/device info
     dist.init_process_group(backend="nccl", init_method="env://")
     dist.barrier()
@@ -252,6 +259,12 @@ def train(
     print(f"seed `random` with {rnd_seed}")
     params = print_params(**locals())
 
+
+
+
+
+
+
     # 1. prepare data & tokenizer
     # 1.1 set-up tokenization config
     task_type = task_level
@@ -263,11 +276,11 @@ def train(
         task_type=task_type,
         tokenizer_class=tokenizer_class,
         attr_assignment=attr_assignment,
-        attr_shuffle=attr_shuffle,
+        attr_shuffle=attr_shuffle, # what's the difference?
     )
     assert (
         tokenizer_config["semantics"]["attr_assignment"]
-        in tokenizer_utils.ATTR_ASSIGNMENT_TYPES
+        in tokenizer_utils.ATTR_ASSIGNMENT_TYPES    # ATTR_ASSIGNMENT_TYPES = {"first", "last", "random", "all", "mix"}
     )
     pprint(tokenizer_config)
     if tokenizer_config["tokenizer_class"] == "StackedGSTTokenizer":
@@ -286,6 +299,13 @@ def train(
         "embed_dim", 0
     ) + tokenizer_config["semantics"]["edge"].get("embed_dim", 0)
     print(f"stacked_feat: {stacked_feat}, embed_dim: {embed_dim}")
+
+
+
+
+
+
+
     # 1.2 get graph dataset
     train_dataset, valid_dataset, test_dataset, raw_dataset = read_dataset(
         name=dataset_name,
@@ -311,6 +331,13 @@ def train(
         else:
             idx = dataset.sampler[0]
             print(dataset[idx])
+
+
+
+
+
+
+
     # 1.3 build vocab and then init tokenizer from the tokenization config
     vocab_builder.build_vocab(raw_dataset, tokenizer_config, rank)
     tokenizer_cls = getattr(tokenizer, tokenizer_config["tokenizer_class"])
@@ -321,6 +348,13 @@ def train(
         num_labels=num_labels,
     )  # loss_type & num_labels -> kwargs
     inspect_tokenization_results(train_dataset, gtokenizer)
+
+
+
+
+
+
+
     # 1.4 get train/valid/test sampler
     (
         train_cnt,
@@ -353,6 +387,13 @@ def train(
         f"\ntotal_num_steps: {total_num_steps}\nwarmup_num_steps: {warmup_num_steps}\n"
     )
 
+
+
+
+
+
+
+
     # 2. set model
     # 2.1 init model config
     config = conf_utils.parse_model_config_for_ft(loss_utils=loss_utils, **locals())
@@ -367,8 +408,16 @@ def train(
     # silence the warnings. Please re-enable for inference!
     model.config.use_cache = False
     if freeze > -1:  # 0->freeze embedding; 1->embed+1st layer
-        modules_utils.freeze_llama_layers(model, freeze)
+        modules_utils.freeze_llama_layers(model, freeze)   # not in config
     print_trainable_parameters(model)
+
+
+
+
+
+
+
+
     # 2.21 load from ckp IF provided existing ckp and NOT resume from the ckp
     model = loader_utils.load_from_ckp(
         misc_utils=misc_utils,
@@ -381,6 +430,13 @@ def train(
     model_ema = None
     if use_ema:
         model_ema = ModelEmaV3(model, decay=ema_decay)
+
+
+
+
+
+
+
     # 2.3 Create optimizer (load optimization config if given)
     # obtain layerwise lr
     model_parameters = model.parameters()
@@ -423,8 +479,15 @@ def train(
         print(
             f"[Debug] model-ema embedding_params:\n{model_ema.module.model.embed_tokens.weight.data}"
         )
+
+
+
+
+
+
+
     # 2.4 Load model parameters and optimizer stats from ckp IF resuming from current ckp
-    if (len(pretrain_cpt) > 0) and (pretrain_cpt == output_dir) and (not eval_only):
+    if (len(pretrain_cpt) > 0) and (pretrain_cpt == output_dir) and (not eval_only):   # not eval_only
         ckp, prev_epoch = misc_utils.get_latest_ckp(pretrain_cpt)
         print(f"Loading pretrained weights from ckp {ckp}")
         if use_deepspeed:
@@ -442,6 +505,14 @@ def train(
             print(f"load model_ema ckp from {ema_ckp}")
     if (rank == 0) and (not eval_only):
         model.module.config.save_pretrained(output_dir)
+
+
+
+
+
+
+
+
     # 3. set initial status
     # 3.0 set initial condition of optimization, either resuming from ckp or starting from scratch
     (
@@ -458,6 +529,13 @@ def train(
         steps_per_epoch=steps_per_epoch,
         eval_only=eval_only,
     )
+
+
+
+
+
+
+
 
     # 3.1 init collator
     collator_fn = collator.DataCollatorForGSTCausal(
@@ -497,6 +575,13 @@ def train(
             )
             tb_writer = SummaryWriter(log_dir=summary_dir, max_queue=30, flush_secs=120)
             print(f"start logging in dir: {summary_dir}")
+
+
+
+
+
+
+
 
     # 4. Training & Inferring
     i = 0
@@ -539,6 +624,8 @@ def train(
         print(
             f"[{datetime.now()}] In eval only mode, ep_init: {ep_init}, epochs: {epochs}!"
         )
+
+
     for epoch in range(ep_init, epochs):
         if not eval_only:
             model.train()
@@ -660,7 +747,7 @@ def train(
                     lr_scheduler.step()
                 if model_ema is not None:
                     model_ema.update(model.module, step=j)
-                if j % logging_steps == 0:
+                if j % logging_steps == 0 and (j > j_init):
                     t_interval = (datetime.now() - t_start).total_seconds()
                     samples_per_second = round(i * batch_size / t_interval)
                     print(
@@ -678,7 +765,7 @@ def train(
                         "loss", loss.item(), j
                     ) if tb_writer is not None else None
                 j += 1
-        else:
+        else:                   # eval_only
             ckp = os.path.join(pretrain_cpt, f"epoch_{epoch}")
             if os.path.exists(ckp):
                 loader_utils.load_from_ckp_with_try(

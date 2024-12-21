@@ -183,7 +183,7 @@ def save_vocab(vocab: List[str], fn: str):
 
 
 def build_vocab(dataset, config, rank=0, use_cache=True):
-    fn = os.path.join(config["name_or_path"], config.get("vocab_file", "vocab"))
+    fn = os.path.join(config["name_or_path"], config.get("vocab_file", "vocab")) # './data/OGB/pcqm4m-v2' 'vocab512_stacked' 
     if rank != 0:
         while not os.path.exists(fn):
             print(
@@ -191,7 +191,8 @@ def build_vocab(dataset, config, rank=0, use_cache=True):
             )
             time.sleep(3)
     else:
-        if os.path.exists(fn) and use_cache:
+        if os.path.exists(fn) and use_cache: # True
+        
             print(f"[{datetime.now()}] Vocab is already built and saved in {fn}!")
         else:
             if not os.path.exists(config["name_or_path"]):

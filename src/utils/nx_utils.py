@@ -591,7 +591,7 @@ def decorate_node_edge_graph_with_mask(
     return ls_tokens, ls_node_regression_labels, ls_edge_regression_labels
 
 
-def permute_nodes(graph, g=None):
+def permute_nodes(graph, g=None):   # used
     if hasattr(graph, "num_nodes"):
         num_nodes = graph.num_nodes
     elif isinstance(graph.x, torch.Tensor):

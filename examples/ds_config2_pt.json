@@ -12,9 +12,9 @@
         "type": "Adam",
         "params": {
             "lr": 3e-4,
-            "weight_decay": 0.01,
+            "weight_decay": 0.1,
             "bias_correction": true,
-            "eps": 1e-6
+            "eps": 1e-8
         }
     },
     "scheduler": {
@@ -22,6 +22,7 @@
       "params": {
           "warmup_min_lr": 0,
           "warmup_max_lr": 3e-4,
+          "warmup_type": "linear",
           "warmup_num_steps": 60000,
           "total_num_steps": 1000000
       }

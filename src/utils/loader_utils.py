@@ -147,11 +147,10 @@ def load_from_ckp_with_try(
     except Exception as inst:
         # print(type(inst))
         # print(inst.args)
-        print(inst)
+        print("inar: ", inst)
         from deepspeed.utils.zero_to_fp32 import (
             get_fp32_state_dict_from_zero_checkpoint,
         )
-
         stat_dict = get_fp32_state_dict_from_zero_checkpoint(ckp)
         print(
             f"[{datetime.now()}] load ckp using DeepSpeed API `get_fp32_state_dict_from_zero_checkpoint`"

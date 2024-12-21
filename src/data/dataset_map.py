@@ -1187,10 +1187,10 @@ class GraphsMapDataset(torch.utils.data.Dataset):
         data: InMemoryDataset,
         sampling_config: Optional[Dict],
         *,
-        sample_idx: Optional[Tensor] = None,
-        permute_nodes: bool = True,
-        provide_sampler: bool = False,
-        with_prob: bool = False,
+        sample_idx: Optional[Tensor] = None, # pretrain_idx
+        permute_nodes: bool = True, # True
+        provide_sampler: bool = False, # True
+        with_prob: bool = False, 
         ensemble_paths: bool = False,
         shift_distribution: bool = False,
         **kwargs,
@@ -1203,14 +1203,14 @@ class GraphsMapDataset(torch.utils.data.Dataset):
         self.g = None
         self.idx_of_ds = 0
         # cannot pickle 'torch._C.Generator' object, so self.g has to None
-        if self.permute_nodes:
+        if self.permute_nodes: # True
             print(
                 "[Warning] permute_nodes enabled! edge_attr remains the same; edge_index and node-attrs will be affected!\n"
                 * 5
             )
         # 1. set-up sampler
         self.ensemble_paths = ensemble_paths
-        if self.ensemble_paths:
+        if self.ensemble_paths: # False
             # try Tensor.scatter_reduce_ to groupby the results
             assert (
                 with_prob is False
@@ -1224,14 +1224,14 @@ class GraphsMapDataset(torch.utils.data.Dataset):
             self.sample_idx = sample_idx
         self.with_prob = with_prob
         self.shift_distribution = shift_distribution
-        if provide_sampler:
+        if provide_sampler: # True
             assert self.sample_idx is not None
-            if self.with_prob:
+            if self.with_prob: # False
                 self.graph_wgts = dataset_utils.obtain_graph_wgts(
                     dataset=data, idx=sample_idx
                 )
                 self.sampler = self._generate_samples_with_prob()
-            elif self.shift_distribution:
+            elif self.shift_distribution: # False
                 self.vec_dist, self.min_num_nodes = _get_target_distribution(data)
                 self.dict_num_nodes2indices = _get_candidate_graphs_mapping(
                     data, sample_idx
@@ -1244,8 +1244,8 @@ class GraphsMapDataset(torch.utils.data.Dataset):
                     seed=0,
                 )
             else:
-                self.sampler = self.sample_idx.tolist()
-            random.shuffle(self.sampler)
+                self.sampler = self.sample_idx.tolist() # pretrain_idx
+            random.shuffle(self.sampler) # shuffle
             self.num_graphs = len(self.sampler)
         # 2. other config
         self.reset_samples()
@@ -1257,7 +1257,7 @@ class GraphsMapDataset(torch.utils.data.Dataset):
             and self.data.y.shape[1] > 1
         ):
             self.idx_tuple = tuple(list(range(self.data.y.shape[1])))
-        else:
+        else: # True
             self.idx_tuple = None
         # TODO: causing problems in ogbg-molpcba dataset, so disable it!
         self.idx_tuple = None
@@ -1272,12 +1272,12 @@ class GraphsMapDataset(torch.utils.data.Dataset):
         return picked_graph.tolist()
 
     def reset_samples(self, epoch: Optional[int] = None, seed: int = 0):
-        if self.with_prob:
+        if self.with_prob: # False
             self.sampler = self._generate_samples_with_prob()
             print(
                 f"[{datetime.now()}] RESET samples of {self.__class__.__name__} of {self.num_graphs} graphs with prob for epoch {epoch}!\nObtaining {len(np.unique(self.sampler))} unique graphs"
             )
-        elif self.shift_distribution:
+        elif self.shift_distribution: # False
             self.sampler = shift_to_target_distribution(
                 train_num=len(self.sample_idx),
                 min_num_nodes=self.min_num_nodes,
@@ -1294,7 +1294,7 @@ class GraphsMapDataset(torch.utils.data.Dataset):
                 f"\nself.sampler[{num}:{num+10}] -> {self.sampler[num:num+10]}"
             )
         else:
-            self.sampler = sorted(self.sampler)
+            self.sampler = sorted(self.sampler)   # self.sampler = self.sample_idx.tolist() # pretrain_idx
             print(
                 f"[{datetime.now()}] NOT RESET samples of {self.__class__.__name__} of {self.num_graphs} graphs for epoch {epoch}!"
             )
@@ -1311,7 +1311,7 @@ class GraphsMapDataset(torch.utils.data.Dataset):
         return idx
 
     def __len__(self):
-        return self.num_graphs
+        return self.num_graphs # self.num_graphs = len(self.sampler)
 
     def __getitem__(self, idx):
         assert isinstance(idx, int)

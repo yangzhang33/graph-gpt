@@ -11,16 +11,22 @@
     "optimizer": {
         "type": "Adam",
         "params": {
-            "lr": 3e-4,
-            "weight_decay": 0.01,
+            "lr": 6e-4,
+            "weight_decay": 0.02,
             "bias_correction": true,
-            "eps": 1e-6
+            "eps": 1e-10
         }
     },
     "scheduler": {
-      "type": "OneCycleLR",
-      "params": {}
+        "type": "WarmupDecayLR",
+        "params": {
+            "warmup_min_lr": 0,
+            "warmup_max_lr": 6e-4,
+            "warmup_num_steps": 126691,
+            "total_num_steps": 422304
+        }
     },
+      
     "zero_optimization": {
         "stage": 2,
         "overlap_comm": true

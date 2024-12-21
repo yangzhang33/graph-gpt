@@ -299,6 +299,9 @@ def parse_deepspeed_config(
         ds_config["gradient_clipping"] = max_grad_norm
     if "optimizer" in ds_config.keys():
         ds_config["optimizer"]["params"]["lr"] = lr
+        betas = betas.strip("[]")
+        betas_list = [float(x.strip()) for x in betas.split(",")]
+        betas = betas_list
         ds_config["optimizer"]["params"]["betas"] = betas
         ds_config["optimizer"]["params"]["eps"] = eps
         ds_config["optimizer"]["params"]["weight_decay"] = weight_decay

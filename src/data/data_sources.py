@@ -479,7 +479,7 @@ def _read_pcqm4mv2(
     *,
     pretrain_mode: bool = False,
     return_valid_test: bool = False,
-    with_prob: bool = False,
+    with_prob: bool = False,    # with_prob (bool): whether to generate samples based on the number of Eulerian paths
     true_valid: int = -1,
     pt_all: bool = False,  # whether to use all data in pre-train
     **kwargs,
@@ -492,9 +492,10 @@ def _read_pcqm4mv2(
     # dataset._data -> Data(edge_index=[2, 109093626], edge_attr=[109093626, 3], x=[52970652, 9], y=[3746620])
     # dataset = dataset_utils.PygPCQM4Mv2ExtraDataset(root=data_dir)
     # dataset._data -> Data(edge_index=[2, 109093626], edge_attr=[109093626, 3], x=[52970652, 12], y=[3746620])
-    print(f"\ndataset._data -> {dataset._data}")
+    print(f"\ndataset._data -> {dataset._data}") # dataset._data -> Data(edge_index=[2, 109093626], edge_attr=[109093626, 3], x=[52970652, 9], y=[3746620])
 
-    if isinstance(dataset, dataset_utils.PygPCQM4Mv2ExtraDataset):
+
+    if isinstance(dataset, dataset_utils.PygPCQM4Mv2ExtraDataset): # False
         dataset._data.x = dataset._data.x[:, [0, 4, 5, 9, 10, 11]]
         dataset._data.edge_attr = dataset._data.edge_attr[:, [1]]
         print(f"\ndataset._data -> {dataset._data}")
@@ -503,9 +504,9 @@ def _read_pcqm4mv2(
     # median is the minimum of y if minimizing MAE
     # https://dsc-courses.github.io/dsc40a-2022-fa/resources/lecture/lec02_mahdi.pdf
 
-    permute_nodes = True
-    split_idx = dataset.get_idx_split()
-    if return_valid_test:
+    permute_nodes = True    # permute_nodes (bool): whether to permute node index. This serve as a kind of data argumentation for graph-gpt
+    split_idx = dataset.get_idx_split() #? train val test
+    if return_valid_test:  # False for pre-train
         shift_distribution = False
         add_cepdb = False
         add_zinc = False
@@ -614,17 +615,19 @@ def _read_pcqm4mv2(
             dataset,
         )
     else:
-        ls_idx = obtain_special_molecules(dataset)
+        ls_idx = obtain_special_molecules(dataset) # None, not given
+            # given a dataset, obtain the index of some kinds of special molecules
+            # e.g., molecules with 1 node/ 2 nodes; disconnected molecules
         print(f"In pre-train mode, set all valid data's y to nan!")
-        valid_idx = split_idx["valid"]
+        valid_idx = split_idx["valid"] # validation set
         y = dataset._data.y.clone()
-        y[valid_idx] = float("nan")
+        y[valid_idx] = float("nan") # set all valid data's y to nan
         # y[torch.arange(len(dataset))] = float("nan")
-        print(f"Before setting, y has {torch.isnan(dataset._data.y).sum()} NANs")
+        print(f"Before setting, y has {torch.isnan(dataset._data.y).sum()} NANs") # Before setting, y has 294469 NANs
         dataset._data.y = y.reshape([-1, 1]).round(decimals=3)
-        print(f"After setting, y has {torch.isnan(dataset._data.y).sum()} NANs")
+        print(f"After setting, y has {torch.isnan(dataset._data.y).sum()} NANs") # After setting, y has 368014 NANs
         try:
-            fn = "dedup_idx" if pt_all else "dedup_idx_train_valid"
+            fn = "dedup_idx" if pt_all else "dedup_idx_train_valid"   # dedup_idx_train_valid
             while not os.path.exists(os.path.join(dataset.root, fn)):
                 if int(dist.get_rank()) == 0:
                     _generate_dedup_idx(dataset, fn, pt_all)
@@ -635,7 +638,7 @@ def _read_pcqm4mv2(
             pretrain_idx = _load_idx_from_file(dataset.root, fn)
             print(
                 f"Using dedup_idx with {len(pretrain_idx)} molecules instead of original {len(dataset)} molecules!"
-            )
+            )  # Using dedup_idx with 3323391 molecules instead of original 3746620 molecules
         except Exception as inst:
             print(inst)
             pretrain_idx = remove_special_molecules(torch.arange(len(dataset)), ls_idx)
@@ -643,7 +646,7 @@ def _read_pcqm4mv2(
             non_pretrain_mols = torch.cat(
                 [split_idx["test-dev"], split_idx["test-challenge"]]
             ).tolist()
-            pretrain_idx = remove_special_molecules(pretrain_idx, non_pretrain_mols)
+            pretrain_idx = remove_special_molecules(pretrain_idx, non_pretrain_mols) # remove test-dev and test-challenge in pretrain_idx
         train_dataset = GraphsMapDataset(
             dataset,
             None,

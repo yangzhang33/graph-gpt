@@ -84,7 +84,7 @@ udf=${raw_udf//$'\n'/}
 
 echo ${udf}
 
-deepspeed ./examples/train_pretrain.py ${raw_udf}
+deepspeed --include localhost:1 ./examples/train_pretrain.py ${raw_udf}
 
 echo $raw_udf
 echo "Train and evaluation finished"

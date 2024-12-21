@@ -1,4 +1,5 @@
 #!/bin/bash
+# export CUDA_VISIBLE_DEVICES=1
 
 # dataset config
 dataset_name="PCQM4Mv2"
@@ -19,10 +20,10 @@ max_position_embeddings=1024
 samples_per_saving=1000000
 
 ds_prefix="pcqm4m-v2"
-mid_dir="202409/"
+mid_dir="base_mlm/"
 
 # ii. model config
-model_name="mini"  # tiny mini small medium base base24 base48 base64 large xlarge xxlarge
+model_name="base"  # tiny mini small medium base base24 base48 base64 large xlarge xxlarge
 stack_method="short"
 stacked_feat_agg_method="gated"  # gated|sum
 tie_word_embeddings=0
@@ -45,13 +46,13 @@ max_grad_norm=5
 eps=1e-8
 use_ema=0
 ## deep-speed config; set it to empty to enable native DDP training
-# deepspeed_config="./examples/ds_config2_pt.json"
-deepspeed_config = ""
+deepspeed_config="./examples/ds_config2_pt.json"
+# deepspeed_config = ""
 
 ## iv. optimization objective
 task_type="pretrain-mlm"  # pretrain  pretrain-mlm  pretrain-ltp  pretrain-euler
 
-suffix="_${hidden_act}_3.3m_nmlm_mrlinear_mtp0.8_0_0.2_lr${lr}_adp${attention_dropout}_pdp${path_dropout}_edp${embed_dropout}_mdp${mlp_dropout}_lsi${layer_scale_init_val}_${stack_method}_${stacked_feat_agg_method}_wd${weight_decay}"
+suffix="_${hidden_act}_${task_type}3.3m_nmlm_mrlinear_mtp0.8_0_0.2_lr${lr}_adp${attention_dropout}_pdp${path_dropout}_edp${embed_dropout}_mdp${mlp_dropout}_lsi${layer_scale_init_val}_${stack_method}_${stacked_feat_agg_method}_wd${weight_decay}"
 #===================================== ABOVE is config for producing our best results ==================================
 
 #=================== BELOW FOR SINGLE GPU TESTING, COMMENT OUT IN NORMAL TRAINING ==============
@@ -193,7 +194,7 @@ udf=${raw_udf//$'\n'/}
 
 echo ${udf}
 
-deepspeed ./examples/train_pretrain.py ${raw_udf}
+deepspeed --include localhost:0 ./examples/train_pretrain.py ${raw_udf}
 
 echo $raw_udf
 echo "Train and evaluation finished"

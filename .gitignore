@@ -30,3 +30,4 @@ xdl_config_*
 /requirements_pai.txt
 src/models/graphbert/__pycache__/
 src/models/graphgpt2/__pycache__/
+output_nohup/

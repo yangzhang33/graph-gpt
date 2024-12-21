@@ -126,23 +126,33 @@ class GraphGPTCausal(LlamaForCausalLM):
         # 1. Transformer's backbone
         LlamaModel = (
             utils_graphgpt.LlamaModel
-            if _use_dropout(self.config)
+            if _use_dropout(self.config) # False
             else modeling_llama.LlamaModel
         )
-        if not config.causal_attention:
+        if not config.causal_attention:   #     causal_attention = 0 if task_type == "pretrain-mlm" else causal_attention
             print(
                 f"\nMonkey Patch {LlamaModel.__name__}'s method `_update_causal_mask`!\n"
             )
-            LlamaModel._update_causal_mask = _update_causal_mask
+            LlamaModel._update_causal_mask = _update_causal_mask # def _update_causal_mask(self, attention_mask, input_tensor, **kwargs): _prepare_4d_attention_mask(attention_mask, input_tensor.dtype)
+            # Creates a non-causal 4D mask of shape `(batch_size, 1, query_length, key_value_length)` from a 2D mask of shape
+            # `(batch_size, key_value_length)`
+
         self.model = LlamaModel(config)
+
+
         # 1.1 Embedding dropout
-        if config.embed_pdrop > 0:
+        if config.embed_pdrop > 0:  # False
             self.embed_dropout = nn.Dropout(p=config.embed_pdrop)
         else:
             self.embed_dropout = None
+
+
+
         # 1.2 Node/edge attributes stacking
         if config.stack_method in {"short", "long"}:
-            self.stacked_feat_agg = StackedFeatAggregation(config)
+            self.stacked_feat_agg = StackedFeatAggregation(config) # PlaceHolder
+
+
         # 1.3 inputs got raw embed feature
         if config.embed_dim > 0:
             self.raw_embed_dropout = None
@@ -214,6 +224,8 @@ class GraphGPTCausal(LlamaForCausalLM):
         )
 
         # 1.1 Converting tokens to look-up embeddings
+        print('begin model ---' * 50)
+        print("input_embeds", inputs_embeds)
         assert inputs_embeds is None
         inputs_embeds = self.model.embed_tokens(input_ids)
         if self.embed_dropout is not None:
@@ -223,6 +235,7 @@ class GraphGPTCausal(LlamaForCausalLM):
             inputs_embeds = self.stacked_feat_agg(inputs_embeds)
             # [bz, seq, feat, dim] ->[bz, seq, dim]
             assert inputs_embeds.shape[:2] == input_ids.shape[:2]
+        print("input_ids at beginning", input_ids.shape)
         input_ids = None
 
         # 1.2 Deal with input raw embeddings if any
@@ -242,7 +255,11 @@ class GraphGPTCausal(LlamaForCausalLM):
                 inputs_raw_embeds = self.raw_embed_dropout(inputs_raw_embeds)
             inputs_raw_embeds = self.embed_proj(inputs_raw_embeds)
             inputs_embeds = inputs_embeds + inputs_raw_embeds
-
+        print("inputs_embeds", inputs_embeds.shape)
+        print("attention_mask", attention_mask.shape)
+        # print("position_ids", position_ids.shape)
+        if past_key_values is not None:
+            print("past_key_values", past_key_values.shape)
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -254,8 +271,11 @@ class GraphGPTCausal(LlamaForCausalLM):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-
+        print(outputs.keys())
+        # if 'past_key_values' in outputs.keys():
+        #     print("past_key_values in outputs dict:", outputs.past_key_values)
         hidden_states = outputs[0]  # [N, seq, dim]
+        print(hidden_states.shape)
         if self.config.stack_method == "long":
             batch_size, seq, _ = hidden_states.shape  # [N, seq, dim]
             # i). obtain mask
@@ -270,26 +290,57 @@ class GraphGPTCausal(LlamaForCausalLM):
             # iii). deal labels: mask
             # [N, seq, next_n] -> [M]
             labels = labels[mask_m]
+            logits = self.lm_head(hidden_states)
         # the version below can save lots of GPU memory and boost speed
-        if self.config.stack_method == "short":
+        if self.config.stack_method == "short" and labels is not None:
             dim = hidden_states.shape[-1]  # [N, seq, dim]
             # i). obtain mask
             labels_m = labels[:, :, 0]  # [N, seq, next_n] -> [N, seq]
+            print("labels", labels.shape)
+            print("labels_m", labels_m.shape)
             mask_m = labels_m != -100  # [N, seq]
+            print("mask_m", mask_m.shape)
+            print(mask_m)
             # ii). deal hidden states: mask and reshape
             # [N, seq, dim] -> [M, dim]
             hidden_states = hidden_states[mask_m]
+            print("hidden_states", hidden_states.shape)
             # [M, dim] -> [M, dim*next_n]
             hidden_states = self.next_n_token_head(hidden_states)
+            print("hidden_states", hidden_states.shape)
             # [M, dim*next_n] -> [M*next_n, dim]
             hidden_states = hidden_states.reshape((-1, dim))
+            print("hidden_states", hidden_states.shape)
             # iii). deal labels: mask and reshape
             # [N, seq, next_n] -> [M, next_n]
             labels = labels[mask_m]
             # [M, next_n] -> [M*next_n]
             labels = labels.reshape(-1)
-        logits = self.lm_head(hidden_states)
-
+            logits = self.lm_head(hidden_states)
+            print("logits", logits.shape)
+        if self.config.stack_method == "short" and labels is None:
+            dim = hidden_states.shape[-1]  # [N, seq, dim]
+            # i). obtain mask
+            # ii). deal hidden states: mask and reshape
+            # [N, seq, dim] -> [M, dim]
+            mask_shape = hidden_states.shape[:-1]
+            mask_m = torch.ones(mask_shape, dtype=torch.bool)
+            print(mask_m)
+            print("hidden_states", hidden_states.shape)
+            hidden_states = hidden_states[mask_m]
+            # [M, dim] -> [M, dim*next_n]
+            print("hidden_states", hidden_states.shape)
+            hidden_states = self.next_n_token_head(hidden_states)
+            print("hidden_states", hidden_states.shape)
+            # [M, dim*next_n] -> [M*next_n, dim]
+            hidden_states = hidden_states.reshape((-1, dim))
+            print("hidden_states", hidden_states.shape)
+            # iii). deal labels: mask and reshape
+            # [N, seq, next_n] -> [M, next_n]
+            logits = self.lm_head(hidden_states)
+            logits = logits.unsqueeze(0)
+            print("logits", logits.shape)
+        print('end model ---' * 50)
         loss = None
         if labels is not None:
             # Flatten the tokens
@@ -1354,7 +1405,7 @@ class GraphGPTForSequenceClassification(LlamaPreTrainedModel):
         )
 
 
-def _use_dropout(config):
+def _use_dropout(config):    # normarly not used
     if (
         sum([config.path_pdrop, config.mlp_pdrop]) > 0
         or config.layer_scale_init_value > 0
