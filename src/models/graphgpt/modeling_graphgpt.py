@@ -21,6 +21,7 @@ import torch
 from dataclasses import dataclass
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss, BCEWithLogitsLoss, L1Loss
+import torch.nn.functional as F
 from typing import List, Optional, Tuple, Union
 from transformers.modeling_outputs import (
     CausalLMOutputWithPast,
@@ -258,8 +259,8 @@ class GraphGPTCausal(LlamaForCausalLM):
         print("inputs_embeds", inputs_embeds.shape)
         print("attention_mask", attention_mask.shape)
         # print("position_ids", position_ids.shape)
-        if past_key_values is not None:
-            print("past_key_values", past_key_values.shape)
+        # if past_key_values is not None:
+        #     print("past_key_values", past_key_values.shape)
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -364,6 +365,81 @@ class GraphGPTCausal(LlamaForCausalLM):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+    def generate_packed(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        max_new_tokens: int = 1,
+        temperature: float = 1.0,
+        top_k: int = 50,
+        eos_token_id: Optional[int] = None,
+        pad_token_id: Optional[int] = None,
+        entire_context: bool = False,
+    ):
+        """
+        Custom generate method to produce packed token sequences.
+
+        Args:
+            input_ids (torch.Tensor): Input sequence of shape (batch size, sequence length, num_features).
+            attention_mask (Optional[torch.Tensor]): Attention mask of shape (batch size, sequence length).
+            max_new_tokens (int): Number of new tokens to generate.
+            temperature (float): Sampling temperature.
+            top_k (int): Number of top logits to consider for sampling.
+            eos_token_id (Optional[int]): End-of-sequence token ID.
+            pad_token_id (Optional[int]): Padding token ID.
+
+        Returns:
+            torch.Tensor: Generated sequences of shape (batch size, new sequence length, num_features).
+        """
+        batch_size, seq_len, num_features = input_ids.shape
+        generated = input_ids
+
+        for _ in range(max_new_tokens):
+            # Forward pass to get logits
+            outputs = self(
+                input_ids=input_ids,
+                attention_mask=attention_mask
+            )
+
+            logits = outputs.logits  # Shape: (batch size, seq_len * num_features, vocab_size)
+            logits = logits[:, -num_features:, :]  # Get logits for the last feature tokens
+
+            # Apply temperature scaling
+            logits = logits / temperature
+
+            # Top-k sampling
+            if top_k > 0:
+                top_k_values, _ = torch.topk(logits, top_k, dim=-1)
+                logits[logits < top_k_values[..., -1, None]] = -float('inf')
+
+            # Sample next tokens
+            probs = F.softmax(logits, dim=-1)
+            next_tokens = torch.multinomial(probs.view(-1, probs.size(-1)), 1).view(batch_size, num_features)
+
+            # Append to generated sequence
+            next_tokens = next_tokens.unsqueeze(1)  # Shape: (batch size, 1, num_features)
+            generated = torch.cat((generated, next_tokens), dim=1)
+
+            # Update input_ids for the next iteration
+            if entire_context:
+                input_ids = torch.cat((input_ids, next_tokens), dim=1)
+            else:
+                input_ids = next_tokens
+
+            # Check for EOS token
+            if eos_token_id is not None and (next_tokens == eos_token_id).all():
+                break
+
+        # Pad sequences if necessary
+        if pad_token_id is not None and generated.shape[1] < max_new_tokens + seq_len:
+            padding = pad_token_id * torch.ones(
+                (batch_size, max_new_tokens + seq_len - generated.shape[1], num_features),
+                dtype=torch.long,
+                device=generated.device,
+            )
+            generated = torch.cat((generated, padding), dim=1)
+
+        return generated
 
 
 class GraphGPTDoubleHeadsModel(LlamaPreTrainedModel):
