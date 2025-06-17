@@ -225,8 +225,8 @@ class GraphGPTCausal(LlamaForCausalLM):
         )
 
         # 1.1 Converting tokens to look-up embeddings
-        print('begin model ---' * 50)
-        print("input_embeds", inputs_embeds)
+        # print('begin model ---' * 50)
+        # print("input_embeds", inputs_embeds)
         assert inputs_embeds is None
         inputs_embeds = self.model.embed_tokens(input_ids)
         if self.embed_dropout is not None:
@@ -236,7 +236,7 @@ class GraphGPTCausal(LlamaForCausalLM):
             inputs_embeds = self.stacked_feat_agg(inputs_embeds)
             # [bz, seq, feat, dim] ->[bz, seq, dim]
             assert inputs_embeds.shape[:2] == input_ids.shape[:2]
-        print("input_ids at beginning", input_ids.shape)
+        # print("input_ids at beginning", input_ids.shape)
         input_ids = None
 
         # 1.2 Deal with input raw embeddings if any
@@ -256,8 +256,8 @@ class GraphGPTCausal(LlamaForCausalLM):
                 inputs_raw_embeds = self.raw_embed_dropout(inputs_raw_embeds)
             inputs_raw_embeds = self.embed_proj(inputs_raw_embeds)
             inputs_embeds = inputs_embeds + inputs_raw_embeds
-        print("inputs_embeds", inputs_embeds.shape)
-        print("attention_mask", attention_mask.shape)
+        # print("inputs_embeds", inputs_embeds.shape)
+        # print("attention_mask", attention_mask.shape)
         # print("position_ids", position_ids.shape)
         # if past_key_values is not None:
         #     print("past_key_values", past_key_values.shape)
@@ -272,11 +272,11 @@ class GraphGPTCausal(LlamaForCausalLM):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        print(outputs.keys())
+        # print(outputs.keys())
         # if 'past_key_values' in outputs.keys():
         #     print("past_key_values in outputs dict:", outputs.past_key_values)
         hidden_states = outputs[0]  # [N, seq, dim]
-        print(hidden_states.shape)
+        # print(hidden_states.shape)
         if self.config.stack_method == "long":
             batch_size, seq, _ = hidden_states.shape  # [N, seq, dim]
             # i). obtain mask
@@ -297,28 +297,28 @@ class GraphGPTCausal(LlamaForCausalLM):
             dim = hidden_states.shape[-1]  # [N, seq, dim]
             # i). obtain mask
             labels_m = labels[:, :, 0]  # [N, seq, next_n] -> [N, seq]
-            print("labels", labels.shape)
-            print("labels_m", labels_m.shape)
+            # print("labels", labels.shape)
+            # print("labels_m", labels_m.shape)
             mask_m = labels_m != -100  # [N, seq]
-            print("mask_m", mask_m.shape)
-            print(mask_m)
+            # print("mask_m", mask_m.shape)
+            # print(mask_m)
             # ii). deal hidden states: mask and reshape
             # [N, seq, dim] -> [M, dim]
             hidden_states = hidden_states[mask_m]
-            print("hidden_states", hidden_states.shape)
+            # print("hidden_states", hidden_states.shape)
             # [M, dim] -> [M, dim*next_n]
             hidden_states = self.next_n_token_head(hidden_states)
-            print("hidden_states", hidden_states.shape)
+            # print("hidden_states", hidden_states.shape)
             # [M, dim*next_n] -> [M*next_n, dim]
             hidden_states = hidden_states.reshape((-1, dim))
-            print("hidden_states", hidden_states.shape)
+            # print("hidden_states", hidden_states.shape)
             # iii). deal labels: mask and reshape
             # [N, seq, next_n] -> [M, next_n]
             labels = labels[mask_m]
             # [M, next_n] -> [M*next_n]
             labels = labels.reshape(-1)
             logits = self.lm_head(hidden_states)
-            print("logits", logits.shape)
+            # print("logits", logits.shape)
         if self.config.stack_method == "short" and labels is None:
             dim = hidden_states.shape[-1]  # [N, seq, dim]
             # i). obtain mask
@@ -326,22 +326,22 @@ class GraphGPTCausal(LlamaForCausalLM):
             # [N, seq, dim] -> [M, dim]
             mask_shape = hidden_states.shape[:-1]
             mask_m = torch.ones(mask_shape, dtype=torch.bool)
-            print(mask_m)
-            print("hidden_states", hidden_states.shape)
+            # print(mask_m)
+            # print("hidden_states", hidden_states.shape)
             hidden_states = hidden_states[mask_m]
             # [M, dim] -> [M, dim*next_n]
-            print("hidden_states", hidden_states.shape)
+            # print("hidden_states", hidden_states.shape)
             hidden_states = self.next_n_token_head(hidden_states)
-            print("hidden_states", hidden_states.shape)
+            # print("hidden_states", hidden_states.shape)
             # [M, dim*next_n] -> [M*next_n, dim]
             hidden_states = hidden_states.reshape((-1, dim))
-            print("hidden_states", hidden_states.shape)
+            # print("hidden_states", hidden_states.shape)
             # iii). deal labels: mask and reshape
             # [N, seq, next_n] -> [M, next_n]
             logits = self.lm_head(hidden_states)
             logits = logits.unsqueeze(0)
-            print("logits", logits.shape)
-        print('end model ---' * 50)
+        #     print("logits", logits.shape)
+        # print('end model ---' * 50)
         loss = None
         if labels is not None:
             # Flatten the tokens

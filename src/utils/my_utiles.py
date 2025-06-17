@@ -5,6 +5,11 @@ import numpy as np
 from torch_geometric.data import Data
 from pprint import pformat
 import torch
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+
+
 
 def graph2smiles(edge_index, edge_attr, x):
     """
@@ -402,3 +407,76 @@ def graph2token2input_generation(
         return token_res.ls_tokens, token_res.ls_labels, token_res.ls_embed, inputs
     else:
         return token_res.ls_tokens, token_res.ls_labels, [], inputs
+    
+
+def remove_zero_rows(tensor):
+    """
+    Remove rows with all zeros along the second dimension while keeping the first dimension.
+
+    Args:
+        tensor (torch.Tensor): Input tensor with shape (1, N, M).
+
+    Returns:
+        torch.Tensor: Tensor with rows containing all zeros removed.
+    """
+    if tensor.dim() != 3 or tensor.size(0) != 1:
+        raise ValueError("Input tensor must have shape (1, N, M).")
+
+    # Squeeze the first dimension for easier processing
+    squeezed_tensor = tensor.squeeze(0)
+
+    # Find rows that are not all zeros
+    non_zero_rows = (squeezed_tensor != 0).any(dim=1)
+
+    # Filter out all-zero rows
+    filtered_tensor = squeezed_tensor[non_zero_rows]
+
+    # Add the first dimension back
+    return filtered_tensor.unsqueeze(0)
+
+
+
+
+
+
+
+################ PLOT ################
+def plot_graph(graph_x, graph_edge_index, graph_edge_attr):
+    """
+    Plots a graph given node features, edge indices, and edge attributes.
+
+    Parameters:
+        graph_x (numpy.ndarray): Node features.
+        graph_edge_index (numpy.ndarray): Edge indices (2 x num_edges).
+        graph_edge_attr (numpy.ndarray): Edge attributes (num_edges x attr_dim).
+    """
+    # Initialize an undirected graph
+    G = nx.Graph()
+
+    # Add nodes with labels from the first element of node features
+    for i, features in enumerate(graph_x):
+        G.add_node(i, label=features[0])
+
+    # Add edges with edge types from the first element of edge attributes
+    for edge, attr in zip(np.array(graph_edge_index).T, graph_edge_attr):
+        node_u, node_v = edge
+        edge_type = attr[0]
+        G.add_edge(node_u, node_v, edge_type=edge_type)
+
+    # Plot the graph
+    pos = nx.spring_layout(G)  # Position nodes using spring layout
+    
+    # Draw nodes with labels
+    labels = nx.get_node_attributes(G, 'label')
+    nx.draw_networkx_nodes(G, pos, node_size=500, node_color='lightblue')
+    nx.draw_networkx_labels(G, pos, labels)
+
+    # Draw edges with edge types as labels
+    edge_labels = nx.get_edge_attributes(G, 'edge_type')
+    nx.draw_networkx_edges(G, pos)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+
+    # Display the graph
+    plt.title("Graph Visualization")
+    plt.axis('off')
+    plt.show()
